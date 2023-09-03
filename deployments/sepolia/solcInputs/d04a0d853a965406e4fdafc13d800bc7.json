@@ -1,0 +1,41 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface AggregatorV3Interface {\n  function decimals() external view returns (uint8);\n\n  function description() external view returns (string memory);\n\n  function version() external view returns (uint256);\n\n  function getRoundData(uint80 _roundId)\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n\n  function latestRoundData()\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n}\n"
+    },
+    "contracts/FundMe.sol": {
+      "content": "//SPDX-License-Identifier: MIT\npragma solidity ^0.8.8;\nimport \"./PriceConverter.sol\";\n\n//890,061\n//870,319\n//846183\nerror NotOwner();\n\ncontract FundMe {\n    using PriceConverter for uint256;\n    address[] public funders;\n    AggregatorV3Interface public priceFeed;\n    mapping(address => uint256) public addressToAmountFunded;\n    uint256 public constant minimumUsd = 1 * 1e18;\n    address public immutable owner;\n\n    constructor(address priceFeedAdress) {\n        owner = msg.sender;\n        priceFeed = AggregatorV3Interface(priceFeedAdress);\n    }\n\n    function fund() public payable {\n        //want to set minimum in usd\n        require(\n            msg.value.getConversionRate(priceFeed) > minimumUsd,\n            \"Didn't send enough amount\"\n        );\n        funders.push(msg.sender);\n        addressToAmountFunded[msg.sender] += msg.value;\n    }\n\n    function withdraw() public onlyOwner {\n        for (\n            uint256 funderIndex = 0;\n            funderIndex < funders.length;\n            funderIndex++\n        ) {\n            address funder = funders[funderIndex];\n            addressToAmountFunded[funder] = 0;\n        }\n        //reset array\n        funders = new address[](0);\n        //withdraw funds\n        (bool callSuccess, ) = payable(msg.sender).call{\n            value: address(this).balance\n        }(\"\");\n        require(callSuccess, \"call failed\");\n    }\n\n    modifier onlyOwner() {\n        //require(msg.sender == owner,\"sender is not owner\");\n        if (msg.sender != owner) {\n            revert NotOwner();\n        }\n        _;\n    }\n\n    //what happens if someone sends ETH without calling the fund function\n    //receive\n    //fallback\n    receive() external payable {\n        fund();\n    }\n\n    fallback() external payable {\n        fund();\n    }\n}\n"
+    },
+    "contracts/PriceConverter.sol": {
+      "content": "//SPDX-License-Identifier: MIT\npragma solidity ^0.8.8;\nimport \"@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol\";\n\nlibrary PriceConverter {\n    function getPrice(\n        AggregatorV3Interface priceFeed\n    ) internal view returns (uint256) {\n        (\n            ,\n            /*uint80 roundId*/ int256 price /*uint256 startedAt*/ /*uint256 updatedAt*/ /* uint80 answeredInRound*/,\n            ,\n            ,\n\n        ) = priceFeed.latestRoundData();\n        //ETH IN USD\n        return uint256(price * 1e10);\n    }\n\n    function getConversionRate(\n        uint256 ethAmount,\n        AggregatorV3Interface priceFeed\n    ) internal view returns (uint256) {\n        uint256 ethPrice = getPrice(priceFeed);\n        uint256 ethAmountInUsd = (ethPrice * ethAmount) / 1e18;\n        return ethAmountInUsd;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
